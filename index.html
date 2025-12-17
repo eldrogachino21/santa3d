@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Santa Sync 11 Pantallas (PC + Pantalla)</title>
+  <link rel="icon" href="data:,">
+
+  <style>
+    html,body{
+      margin:0;
+      height:100%;
+      overflow:hidden;
+
+      background-image: url("https://images.unsplash.com/photo-1642921558525-af3c61b38cea?q=80&w=2070&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D");
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+    canvas{display:block}
+
+    #screenPicker{
+      position:fixed;
+      right:12px;
+      bottom:12px;
+      z-index:9999;
+      display:none;
+      padding:12px 12px;
+      border-radius:12px;
+      background:rgba(255,255,255,0.92);
+      font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      box-shadow:0 10px 25px rgba(0,0,0,0.25);
+      user-select:none;
+      min-width: 260px;
+    }
+    #screenPicker .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin:6px 0;
+    }
+    #screenPicker select, #screenPicker input{
+      padding:6px 8px;
+      border-radius:10px;
+      border:1px solid rgba(0,0,0,0.25);
+      background:white;
+      width:150px;
+      box-sizing:border-box;
+    }
+    #pcId{
+      font-size:12px;
+      opacity:0.75;
+      word-break: break-all;
+      margin-top:6px;
+    }
+    #screenHint{
+      font-size:12px;
+      opacity:0.75;
+      margin-top:6px;
+    }
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+
+<div id="screenPicker">
+  <div class="row">
+    <b>Pantalla</b>
+    <select id="screenSelect"></select>
+  </div>
+
+  <div class="row">
+    <b>PC soy</b>
+    <input id="pcNameInput" type="text" placeholder="Ej: PC-01" />
+  </div>
+
+  <div class="row">
+    <span>Offset (seg)</span>
+    <input id="offsetInput" type="number" step="0.1" value="0">
+  </div>
+
+  <div id="pcId"></div>
+  <div id="screenHint">Ctrl + B para mostrar/ocultar</div>
+</div>
+
+<script type="module">
+  import * as THREE from "three";
+  import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+
+  /* ======================
+     CONFIG PANTALLAS + PC
+     ====================== */
+  const TOTAL_SCREENS = 11;
+
+  const STORAGE_SCREEN = "santa_screen_idx";
+  const STORAGE_OFFSET = "santa_time_offset_sec";
+  const STORAGE_PCNAME = "santa_pc_name";
+  const STORAGE_PCID   = "santa_pc_id";
+
+  // (Opcional) offsets automáticos por PC (en segundos)
+  // Ejemplo: si PC-03 siempre se ve atrasada ~0.7s, ponle +0.7
+  const OFFSETS_BY_PC = {
+    // "PC-01": 0,
+    // "PC-02": 0.3,
+    // "PC-03": -0.7,
+  };
+
+  // Genera un ID único para esta PC (persistente)
+  function getOrCreatePcId(){
+    let id = localStorage.getItem(STORAGE_PCID);
+    if (!id){
+      id = (crypto?.randomUUID?.() || ("pc-" + Math.random().toString(16).slice(2) + Date.now().toString(16)));
+      localStorage.setItem(STORAGE_PCID, id);
+    }
+    return id;
+  }
+
+  let MI_PANTALLA = Number(localStorage.getItem(STORAGE_SCREEN) || 1);
+  let TIME_OFFSET_SEC = Number(localStorage.getItem(STORAGE_OFFSET) || 0);
+  let PC_NAME = String(localStorage.getItem(STORAGE_PCNAME) || "");
+  const PC_ID = getOrCreatePcId();
+
+  // UI
+  const picker = document.getElementById("screenPicker");
+  const select = document.getElementById("screenSelect");
+  const offsetInput = document.getElementById("offsetInput");
+  const pcNameInput = document.getElementById("pcNameInput");
+  const pcIdEl = document.getElementById("pcId");
+
+  for(let i=1;i<=TOTAL_SCREENS;i++){
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = `Pantalla ${i}`;
+    select.appendChild(opt);
+  }
+
+  MI_PANTALLA = Math.min(Math.max(MI_PANTALLA, 1), TOTAL_SCREENS);
+  select.value = String(MI_PANTALLA);
+  offsetInput.value = String(TIME_OFFSET_SEC);
+  pcNameInput.value = PC_NAME;
+  pcIdEl.textContent = `ID único de esta PC: ${PC_ID}`;
+
+  document.addEventListener("keydown", (e)=>{
+    if(e.ctrlKey && (e.key === "b" || e.key === "B")){
+      picker.style.display = (!picker.style.display || picker.style.display === "none") ? "block" : "none";
+    }
+  });
+
+  select.addEventListener("change", ()=>{
+    MI_PANTALLA = Number(select.value);
+    localStorage.setItem(STORAGE_SCREEN, String(MI_PANTALLA));
+  });
+
+  offsetInput.addEventListener("input", ()=>{
+    TIME_OFFSET_SEC = Number(offsetInput.value || 0);
+    localStorage.setItem(STORAGE_OFFSET, String(TIME_OFFSET_SEC));
+  });
+
+  pcNameInput.addEventListener("input", ()=>{
+    PC_NAME = String(pcNameInput.value || "").trim();
+    localStorage.setItem(STORAGE_PCNAME, PC_NAME);
+  });
+
+  // Offset final que se aplica: (manual + automático por PC si existe)
+  function getEffectiveOffsetSec(){
+    const auto = (PC_NAME && OFFSETS_BY_PC[PC_NAME] != null) ? Number(OFFSETS_BY_PC[PC_NAME]) : 0;
+    return TIME_OFFSET_SEC + auto;
+  }
+
+  /* ======================
+     RECORRIDO MULTI-PANTALLA
+     ====================== */
+  const X_MIN = -18;
+  const X_MAX =  18;
+  const SEGMENT_W = (X_MAX - X_MIN);
+  const TOTAL_W = SEGMENT_W * TOTAL_SCREENS;
+
+  const GLOBAL_MIN = -TOTAL_W / 2;
+  const GLOBAL_MAX =  TOTAL_W / 2;
+
+  function screenStartGlobal(screenIdx){
+    return GLOBAL_MIN + (screenIdx - 1) * SEGMENT_W;
+  }
+
+  /* ======================
+     TIEMPO SINCRONIZADO (RELOJ LOCAL)
+     ====================== */
+  const CYCLE_SECONDS = 30; // tiempo para recorrer TODAS las pantallas
+
+  function localMidnightEpochMs(){
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    return d.getTime();
+  }
+
+  function computeGlobalXFromLocalTime(){
+    const epoch = localMidnightEpochMs();
+    const cycleMs = CYCLE_SECONDS * 1000;
+    const nowMs = Date.now() + (getEffectiveOffsetSec() * 1000);
+
+    const elapsedMs = ((nowMs - epoch) % cycleMs + cycleMs) % cycleMs;
+    const t = elapsedMs / cycleMs; // 0..1
+
+    return GLOBAL_MIN + t * (GLOBAL_MAX - GLOBAL_MIN);
+  }
+
+  /* ======================
+     CÁMARA
+     ====================== */
+  const FOV = 24;
+  const CAM_Y = 3.2;
+  const CAM_Z = 11.5;
+  const LOOK_Y = 1.0;
+
+  /* ======================
+     ROTACIÓN DEL MODELO
+     ====================== */
+  const MODEL_YAW = Math.PI / 2;
+  const MODEL_PITCH = 0;
+  const MODEL_ROLL = 0;
+
+  /* ======================
+     NIEVE
+     ====================== */
+  const SNOW_COUNT = 1800;
+  const SNOW_AREA_X = 70;
+  const SNOW_AREA_Z = 45;
+  const SNOW_TOP_Y  = 25;
+  const SNOW_BOTTOM_Y = -3;
+  const SNOW_SPEED_MIN = 0.03;
+  const SNOW_SPEED_MAX = 0.12;
+
+  /* ======================
+     ESCENA
+     ====================== */
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x020617, 15, 80);
+
+  const camera = new THREE.PerspectiveCamera(FOV, innerWidth/innerHeight, 0.1, 200);
+  camera.position.set(0, CAM_Y, CAM_Z);
+  camera.lookAt(0, LOOK_Y, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  document.body.appendChild(renderer.domElement);
+
+  /* LUCES */
+  scene.add(new THREE.AmbientLight(0x223344, 0.8));
+  const key = new THREE.DirectionalLight(0xbfd9ff, 1.6);
+  key.position.set(10, 18, 8);
+  scene.add(key);
+  const rim = new THREE.DirectionalLight(0xffffff, 0.9);
+  rim.position.set(-10, 6, -10);
+  scene.add(rim);
+
+  /* ======================
+     NIEVE
+     ====================== */
+  let snow = null;
+  let snowPositions = null;
+  let snowSpeeds = null;
+
+  function rand(min, max){ return min + Math.random() * (max - min); }
+
+  function createSnow(){
+    const geom = new THREE.BufferGeometry();
+    snowPositions = new Float32Array(SNOW_COUNT * 3);
+    snowSpeeds = new Float32Array(SNOW_COUNT);
+
+    for(let i=0;i<SNOW_COUNT;i++){
+      const ix = i*3;
+      snowPositions[ix+0] = rand(-SNOW_AREA_X/2, SNOW_AREA_X/2);
+      snowPositions[ix+1] = rand(SNOW_BOTTOM_Y, SNOW_TOP_Y);
+      snowPositions[ix+2] = rand(-SNOW_AREA_Z/2, SNOW_AREA_Z/2);
+      snowSpeeds[i] = rand(SNOW_SPEED_MIN, SNOW_SPEED_MAX);
+    }
+
+    geom.setAttribute("position", new THREE.BufferAttribute(snowPositions, 3));
+
+    const mat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.07,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false
+    });
+
+    snow = new THREE.Points(geom, mat);
+    scene.add(snow);
+  }
+
+  function updateSnow(){
+    if(!snow) return;
+    const pos = snow.geometry.attributes.position;
+
+    for(let i=0;i<SNOW_COUNT;i++){
+      const ix = i*3;
+      pos.array[ix+1] -= snowSpeeds[i];
+      pos.array[ix+0] += Math.sin((Date.now()*0.001) + i) * 0.0012;
+
+      if(pos.array[ix+1] < SNOW_BOTTOM_Y){
+        pos.array[ix+1] = SNOW_TOP_Y;
+        pos.array[ix+0] = rand(-SNOW_AREA_X/2, SNOW_AREA_X/2);
+        pos.array[ix+2] = rand(-SNOW_AREA_Z/2, SNOW_AREA_Z/2);
+        snowSpeeds[i] = rand(SNOW_SPEED_MIN, SNOW_SPEED_MAX);
+      }
+    }
+    pos.needsUpdate = true;
+  }
+
+  createSnow();
+
+  /* ======================
+     CARGA GLB + BLOQUEO ROTACIÓN
+     ====================== */
+  const loader = new GLTFLoader();
+  let carrier = null;
+  let model = null;
+  const lockedQuats = new Map();
+
+  function lockAllRotations(root){
+    lockedQuats.clear();
+    root.traverse((o) => lockedQuats.set(o.uuid, o.quaternion.clone()));
+  }
+  function applyLockedRotations(root){
+    root.traverse((o) => {
+      const q = lockedQuats.get(o.uuid);
+      if (q) o.quaternion.copy(q);
+    });
+  }
+
+  loader.load(
+    "./base_basic_pbr.glb",
+    (gltf) => {
+      model = gltf.scene;
+
+      model.rotation.set(MODEL_PITCH, MODEL_YAW, MODEL_ROLL);
+
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      model.position.sub(center);
+
+      model.scale.setScalar(1.3);
+
+      carrier = new THREE.Group();
+      carrier.add(model);
+      scene.add(carrier);
+
+      lockAllRotations(model);
+      console.log("GLB cargado OK. Animaciones:", gltf.animations?.length || 0);
+    },
+    undefined,
+    (err) => console.error("Error GLB:", err)
+  );
+
+  /* ======================
+     ANIMACIÓN (SINCRONIZADA)
+     ====================== */
+  function animate(){
+    requestAnimationFrame(animate);
+    updateSnow();
+
+    if (carrier && model){
+      const globalX = computeGlobalXFromLocalTime();
+
+      const start = screenStartGlobal(MI_PANTALLA);
+      const end = start + SEGMENT_W;
+
+      const visibleHere = (globalX >= start && globalX < end);
+      carrier.visible = visibleHere;
+
+      if (visibleHere){
+        const localX = X_MIN + (globalX - start);
+        carrier.position.x = localX;
+        carrier.position.y = 0;
+      }
+
+      applyLockedRotations(model);
+    }
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  addEventListener("resize", () => {
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+</script>
+</body>
+</html>
